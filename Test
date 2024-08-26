@@ -1,8 +1,35 @@
 from main import EventManager, EventDecorators
 
+#самый простой пример
 @EventDecorators.test("test")
 def test():
     print("test")
 
 with EventManager() as event_manager:
     event_manager.send_events(["test",])
+
+#отправка аргументов в функцию
+@EventDecorators.test("test2")
+def test2(number):
+    print("test")
+    print(number)
+
+with EventManager() as event_manager:
+    event_manager.set_func_data(test2, 100)
+    event_manager.send_events(["test2",])
+
+# к одному событию можно прикрепить несколько функций
+@EventDecorators.test("test3")
+def test3():
+    print("test")
+@EventDecorators.test("test3")
+def test4():
+    print("test")
+    return 99
+
+# также можно получить результат функции
+with EventManager() as event_manager:
+    event_manager.send_events(["test3",])
+    print(event_manager.get_func_result(test4))
+
+#также есть куча разных декораторов для разных задач
