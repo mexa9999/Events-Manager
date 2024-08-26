@@ -1,0 +1,323 @@
+from functools import lru_cache
+from typing import Callable, List, Dict, Any
+
+class EventFunction:
+    """
+    Класс, представляющий функцию, связанную с событием.
+    """
+    
+    functions = {}  # Статический словарь для хранения всех зарегистрированных функций событий
+    
+    def __init__(self, func: Callable, priority: int = 1, cache: bool = False, return_result: bool = False):
+        """
+        Инициализирует функцию события.
+
+        Args:
+            func: Сама функция.
+            priority: Приоритет функции.
+            cache: Флаг, определяющий, нужно ли кэшировать результат функции.
+            return_result: Флаг, определяющий, нужно ли возвращать результат функции.
+        """
+        
+        EventFunction.functions[func] = self  # Добавляем функцию в словарь
+        if cache:
+            self.func = lru_cache(func)  # Используем lru_cache для кэширования результата, если нужно
+        else:
+            self.func = func
+        self.return_result = return_result
+        self.priority = priority
+        self.result = None  # Инициализируем результат функции
+        self.args = ()  # Инициализируем аргументы функции
+        self.kwargs = {}  # Инициализируем ключевые аргументы функции
+    
+    def __call__(self) -> Any:
+        """
+        Вызывает функцию события и сохраняет результат.
+
+        Returns:
+            Результат функции события.
+        """
+        self.result = self.func(*self.args, **self.kwargs)  # Вызываем функцию с аргументами
+        return self.result
+    
+    @property
+    def get_result(self):
+        """
+        Возвращает результат функции события.
+
+        Returns:
+            Результат функции.
+        """
+        return self.result
+        
+    def set_data(self, *args, **kwargs):
+        """
+        Устанавливает аргументы и ключевые аргументы для функции.
+
+        Args:
+            *args: Позиционные аргументы.
+            **kwargs: Ключевые аргументы.
+        """
+        self.args = args
+        self.kwargs = kwargs
+
+class EventDecorators:
+    """
+    Класс, предоставляющий декораторы для регистрации функций событий.
+    """
+    
+    all_func: Dict[str, List[EventFunction]] = {}  # Словарь для хранения всех функций, разбитых по событиям
+    
+    @classmethod
+    def standart(cls, event: str, priority: int = 1, cache: bool = False, return_result: bool = False):
+        """
+        Декоратор для регистрации функции события с заданным приоритетом, кэшированием и возвратом результата.
+
+        Args:
+            event: Название события.
+            priority: Приоритет функции.
+            cache: Флаг, определяющий, нужно ли кэшировать результат функции.
+            return_result: Флаг, определяющий, нужно ли возвращать результат функции.
+
+        Returns:
+            Декорированная функция.
+        """
+        def wrapper(func: Callable) -> Callable:
+            EventDecorators.all_func.setdefault(event, []).append(
+                EventFunction(func, priority, cache, return_result)
+            )  # Добавляем функцию в словарь событий
+            return func
+        return wrapper
+    
+    @classmethod
+    def test(cls, event: str):
+        """
+        Декоратор для регистрации тестовой функции события.
+
+        Args:
+            event: Название события.
+
+        Returns:
+            Декорированная функция.
+        """
+        def wrapper(func: Callable) -> Callable:
+            EventDecorators.all_func.setdefault(event, []).append(EventFunction(func))
+            return func
+        return wrapper
+
+    @classmethod
+    def cache_on(cls, event: str, priority: int = 1, return_result: bool = False ):
+        """
+        Декоратор для регистрации функции события с кэшированием результата.
+
+        Args:
+            event: Название события.
+            priority: Приоритет функции.
+            return_result: Флаг, определяющий, нужно ли возвращать результат функции.
+
+        Returns:
+            Декорированная функция.
+        """
+        def wrapper(func: Callable) -> Callable:
+            EventDecorators.all_func.setdefault(event, []).append(EventFunction(func, priority, True, return_result))
+            return func
+        return wrapper
+    
+    @classmethod
+    def high_priority(cls, event: str, cache: bool = False, return_result: bool = False):
+        """
+        Декоратор для регистрации функции события с высоким приоритетом.
+
+        Args:
+            event: Название события.
+            cache: Флаг, определяющий, нужно ли кэшировать результат функции.
+            return_result: Флаг, определяющий, нужно ли возвращать результат функции.
+
+        Returns:
+            Декорированная функция.
+        """
+        def wrapper(func: Callable) -> Callable:
+            EventDecorators.all_func.setdefault(event, []).append(
+                EventFunction(func, -100000, cache, return_result)
+            )  # Устанавливаем высокий приоритет
+            return func
+        return wrapper
+    
+    @classmethod
+    def low_priority(cls, event: str, cache: bool = False, return_result: bool = False):
+        """
+        Декоратор для регистрации функции события с низким приоритетом.
+
+        Args:
+            event: Название события.
+            cache: Флаг, определяющий, нужно ли кэшировать результат функции.
+            return_result: Флаг, определяющий, нужно ли возвращать результат функции.
+
+        Returns:
+            Декорированная функция.
+        """
+        def wrapper(func: Callable) -> Callable:
+            EventDecorators.all_func.setdefault(event, []).append(
+                EventFunction(func, 100000, cache, return_result)
+            )  # Устанавливаем низкий приоритет
+            return func
+        return wrapper
+
+class EventError(Exception):
+    """
+    Класс, определяющий пользовательские исключения для системы событий.
+    """
+    
+   class DontEvent(Exception):
+       """
+       Исключение, которое возникает, если указанное событие не существует.
+       """
+       pass
+       
+   class FuncError(Exception):
+       """
+       Исключение, которое возникает, если функция события вызывает ошибку.
+       """
+       pass
+       
+class EventExecuter:
+    """
+    Класс, отвечающий за выполнение функций событий.
+    """
+    
+    def __init__(self):
+        """
+        Инициализирует генератор событий.
+        """
+        self.generator = self.create_event_handler()
+        next(self.generator)  # Запускаем генератор
+        
+    def execute_func(self, func: Callable):
+        """
+        Выполняет функцию события, обрабатывая возможные ошибки.
+
+        Args:
+            func: Функция события.
+        """
+        try:
+                func()  # Вызываем функцию события
+        except Exception as error:
+            raise EventError.FuncError(
+            f"в функции {func.__name__} ошибка: {error}")  # Выбрасываем исключение, если функция вызвала ошибку
+        
+    def create_event_handler(self):
+        """
+        Создает генератор, который управляет выполнением функций событий.
+
+        Yields:
+            Функция события.
+        """
+        state: Any = None
+        while 1:
+            state = yield
+            self.execute_func(state)  # Выполняем переданную функцию события
+            
+    def create_func_group(self, events: List[str], reverse: bool = False):
+        """
+        Собирает функции событий для заданного набора событий и сортирует их по приоритету.
+
+        Args:
+            events: Список названий событий.
+            reverse: Флаг, определяющий, нужно ли сортировать в обратном порядке.
+        """
+        group: List[EventFunction] = []
+        for event in events:
+            if event in EventDecorators.all_func:
+                group += EventDecorators.all_func[event]  # Добавляем функции события в группу
+            else:
+                raise EventError.DontEvent(f"ивента: '{event}' не существует")  # Выбрасываем исключение, если событие не найдено
+        self.send_func_group(sorted(group, key=lambda func: func.priority, reverse=reverse))  # Отправляем группу функций на выполнение
+        
+    def send_func_group(self, funcs: List[EventFunction]):
+        """
+        Отправляет функции события в генератор для выполнения.
+
+        Args:
+            funcs: Список функций события.
+        """
+        for func in funcs:
+            self.generator.send(func)  # Отправляем функцию в генератор
+            
+    def __del__(self):
+        """
+        Очищает генератор при удалении объекта.
+        """
+        self.generator.close()  # Закрываем генератор
+        del self.generator
+
+class EventManager:
+    """
+    Класс, управляющий системой событий.
+    """
+    
+    def __init__(self):
+        """
+        Инициализирует экземпляр EventExecuter.
+        """
+        self.executer = EventExecuter()
+        
+    def send_events(self, events: List[str], reverse: bool = False):
+        """
+        Отправляет список событий на выполнение.
+
+        Args:
+            events: Список названий событий.
+            reverse: Флаг, определяющий, нужно ли сортировать в обратном порядке.
+        """
+        self.executer.create_func_group(events, reverse)  # Создаем группу функций и отправляем на выполнение
+    
+    def get_func_result(self, func):
+        """
+        Возвращает результат выполнения функции события.
+
+        Args:
+            func: Функция события.
+
+        Returns:
+            Результат выполнения функции.
+        """
+        return EventFunction.functions[func].get_result
+        
+    def set_func_data(self, func, *args, **kwargs):
+        """
+        Устанавливает аргументы и ключевые аргументы для функции события.
+
+        Args:
+            func: Функция события.
+            *args: Позиционные аргументы.
+            **kwargs: Ключевые аргументы.
+        """
+        EventFunction.functions[func].set_data(*args, **kwargs)
+        
+    def __enter__(self):
+        """
+        Включает контекстный менеджер.
+
+        Returns:
+            Экземпляр EventManager.
+        """
+        return self
+        
+    def __exit__(self, exc_type, exc_value, traceback):
+        """
+        Выключает контекстный менеджер, очищает ресурсы.
+
+        Args:
+            exc_type: Тип исключения.
+            exc_value: Значение исключения.
+            traceback: Трассировка стека.
+        """
+        del self.executer  # Удаляем экземпляр EventExecuter
+        del self  # Удаляем себя
+        
+    def __del__(self):
+        """
+        Очищает ресурсы при удалении объекта.
+        """
+        if hasattr(self, "executer"):
+            del self.executer
