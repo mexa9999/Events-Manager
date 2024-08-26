@@ -1,0 +1,8 @@
+from main import EventManager, EventDecorators
+
+@EventDecorators.test("test")
+def test():
+    print("test")
+
+with EventManager() as event_manager:
+    event_manager.send_events(["test",])
